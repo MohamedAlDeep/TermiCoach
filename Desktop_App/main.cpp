@@ -268,14 +268,15 @@ void DownloadAndOpenDashboard() {
     }
 
 #if defined(_WIN32)
-    std::string command = "start " + filename;
+    // On Windows, use ShellExecute to open the file in the default browser
+    ShellExecuteA(NULL, "open", filename.c_str(), NULL, NULL, SW_SHOWNORMAL);
 #elif defined(__APPLE__)
     std::string command = "open " + filename;
+    system(command.c_str());
 #else
     std::string command = "xdg-open " + filename;
-#endif
-
     system(command.c_str());
+#endif
 }
 
 void welcomeMessage(){

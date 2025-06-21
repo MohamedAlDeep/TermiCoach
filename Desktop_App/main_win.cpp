@@ -228,7 +228,86 @@ void welcomeMessage(){
     cout << "Let's get started with your workout! \n\n" << endl;
 }
 
+// Function to manually download and open the dashboard HTML file
+void DownloadAndOpenDashboard() {
+    const std::string filename = "dashboard.html";
+    const std::string dashboardContent = R"(<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TermiCoach Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1 { color: #e74c3c; }
+        .workout-list { margin-top: 20px; }
+        .workout-item { border-bottom: 1px solid #eee; padding: 10px 0; }
+        .workout-item:last-child { border-bottom: none; }
+        .stats { display: flex; margin-top: 20px; }
+        .stat-box { flex: 1; padding: 15px; background-color: #f9f9f9; margin-right: 10px; border-radius: 5px; text-align: center; }
+        .stat-box:last-child { margin-right: 0; }
+        .stat-value { font-size: 24px; font-weight: bold; color: #e74c3c; }
+        .stat-label { font-size: 14px; color: #777; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>TermiCoach Dashboard</h1>
+        <p>This is a simple dashboard for TermiCoach. For a more detailed view, please load your workout data.</p>
+        
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value">--</div>
+                <div class="stat-label">Total Workouts</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value">--</div>
+                <div class="stat-label">Total Calories</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value">--</div>
+                <div class="stat-label">Avg. Calories/Workout</div>
+            </div>
+        </div>
+        
+        <div class="workout-list">
+            <h2>Recent Workouts</h2>
+            <p>Export your data and reload this page to see your workout history.</p>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Dashboard loaded');
+            // This is a placeholder for future dashboard functionality
+            // In a future version, this could load the CSV data and display it
+        });
+    </script>
+</body>
+</html>)";
 
+    // Create the dashboard HTML file
+    FILE* file = fopen(filename.c_str(), "wb");
+    if (!file) {
+        std::cerr << "Failed to open file for writing: " << filename << std::endl;
+        return;
+    }
+
+    // Write the content to the file
+    fwrite(dashboardContent.c_str(), sizeof(char), dashboardContent.length(), file);
+    fclose(file);
+
+    // Open the file using the default browser
+    #ifdef _WIN32
+    ShellExecuteA(NULL, "open", filename.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    #else
+    std::string command = "xdg-open " + filename;
+    system(command.c_str());
+    #endif
+
+    std::cout << "Dashboard opened in your default browser." << std::endl;
+}
 
 int main() {
     welcomeMessage();
@@ -269,7 +348,7 @@ int main() {
             calculateWorkoutCalories(name + " " + reps + " " + sets);
             InsertWorkout(db, name, reps, sets, CaloriesBurnt);
         } else if (choice == 2) {
-            cout << "View dashboard feature not implemented yet." << endl;
+            DownloadAndOpenDashboard();
         } else if (choice == 3) {
             ShowLastWorkout(db);
         } else if (choice == 4) {
