@@ -236,6 +236,48 @@ void ExportToCSV(sqlite3* db, const string& filename) {
     cout << "Exported workouts to " << filename << endl;
 }
 
+void DownloadAndOpenDashboard() {
+    const std::string url = "https://raw.githubusercontent.com/MohamedAlDeep/TermiCoach/refs/heads/main/Dashboard/dashboard.html";
+    const std::string filename = "dashboard.html";
+
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        std::cerr << "Failed to initialize curl." << std::endl;
+        return;
+    }
+
+    FILE* file = fopen(filename.c_str(), "wb");
+    if (!file) {
+        std::cerr << "Failed to open file for writing: " << filename << std::endl;
+        curl_easy_cleanup(curl);
+        return;
+    }
+
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
+    curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
+
+    CURLcode res = curl_easy_perform(curl);
+    fclose(file);
+    curl_easy_cleanup(curl);
+
+    if (res != CURLE_OK) {
+        std::cerr << "Failed to download dashboard: " << curl_easy_strerror(res) << std::endl;
+        remove(filename.c_str());
+        return;
+    }
+
+#if defined(_WIN32)
+    std::string command = "start " + filename;
+#elif defined(__APPLE__)
+    std::string command = "open " + filename;
+#else
+    std::string command = "xdg-open " + filename;
+#endif
+
+    system(command.c_str());
+}
+
 void welcomeMessage(){
     // Print "Welcome to TermiCoach" in bold red, slightly smaller ASCII art
     cout << "\033[1;31m"; // Bold red
@@ -257,6 +299,7 @@ void welcomeMessage(){
     cout << "Your personal fitness assistant." << endl;
     cout << "Let's get started with your workout! \n\n" << endl;
 }
+
 
 
 
@@ -305,7 +348,7 @@ int main() {
             curlRunUp(curl, name + " " + reps + " " + sets);
             InsertWorkout(db, name, reps, sets, CaloriesBurnt); // Example workout
         } else if (choice == 2) {
-            cout << "View dashboard feature not implemented yet." << endl;
+            DownloadAndOpenDashboard();
         } else if (choice == 3) {
             ShowLastWorkout(db);
         } else if (choice == 4) {
