@@ -1,0 +1,35 @@
+# Makefile for cross-compiling TermiCoach for Windows
+# Compilers and flags
+CXX = x86_64-w64-mingw32-g++
+CC = x86_64-w64-mingw32-gcc
+CXXFLAGS = -std=c++11 -Wall -Iwin-deps/sqlite-amalgamation-3430000
+CFLAGS = -Wall -Iwin-deps/sqlite-amalgamation-3430000
+
+# Libraries and linker flags
+LDFLAGS = -L./win-deps
+LIBS = -static -static-libgcc -static-libstdc++ -lwinpthread
+
+# Object files
+OBJS = main_win.o sqlite3.o
+
+# Target executable
+TARGET = termicoach.exe
+
+# Rules
+all: $(TARGET)
+
+# Compile sqlite3.c with C compiler
+sqlite3.o: win-deps/sqlite-amalgamation-3430000/sqlite3.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(TARGET): $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS) $(LIBS)
+	cp win-deps/sqlite3.dll .
+
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(TARGET) $(OBJS) sqlite3.dll
+
+.PHONY: all clean
