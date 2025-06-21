@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workout Data Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .chart-container {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+            background: #f9f9f9;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+        }
+        #file-info {
+            margin: 20px 0;
+            padding: 10px;
+            background: #eef;
+            border-radius: 5px;
+        }
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+            background: #f5f5f5;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+        #exercise-selector {
+            margin: 10px 0;
+            padding: 8px;
+            width: 100%;
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Workout Data Dashboard</h1>
+    
+    <input type="file" id="csvFile" accept=".csv">
+    <div id="file-info"></div>
+    
+    <div id="dashboard-content" style="display: none;">
+        <div class="stats-container" id="summary-stats"></div>
+        
+        <select id="exercise-selector" onchange="updateExerciseCharts()">
+            <option value="">All Exercises</option>
+        </select>
+        
+        <div class="dashboard">
+            <div class="chart-container">
+                <h2>Calories Burned Over Time</h2>
+                <canvas id="caloriesChart"></canvas>
+            </div>
+            
+            <div class="chart-container">
+                <h2>Total Volume (Reps × Sets)</h2>
+                <canvas id="volumeChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <h2>Exercise Frequency</h2>
+            <canvas id="exerciseChart"></canvas>
+        </div>
+        
+        <h2>Workout Data</h2>
+        <div style="max-height: 400px; overflow-y: auto;">
+            <table id="workoutTable">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Exercise</th>
+                        <th>Reps</th>
+                        <th>Sets</th>
+                        <th>Calories</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let workoutData = [];
+        let caloriesChart, volumeChart, exerciseChart;
+        
+        // File upload handler
+        document.getElementById('csvFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            document.getElementById('file-info').textContent = `File: ${file.name} (${(file.size/1024).toFixed(2)} KB)`;
+            
+            // Parse CSV file
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                complete: function(results) {
+                    if (results.data.length === 0) {
+                        alert("No data found in CSV file");
+                        return;
+                    }
+                    
+                    // Validate required columns
+                    const requiredColumns = ['id', 'timestamp', 'name', 'reps', 'sets', 'calories'];
+                    const missingColumns = requiredColumns.filter(col => !results.meta.fields.includes(col));
+                    
+                    if (missingColumns.length > 0) {
+                        alert(`Missing required columns: ${missingColumns.join(', ')}`);
+                        return;
+                    }
+                    
+                    // Process data
+                    workoutData = results.data.map(item => {
+                        // Convert timestamp to Date object
+                        const date = new Date(item.timestamp);
+                        return {
+                            ...item,
+                            date: date,
+                            dateString: date.toLocaleDateString(),
+                            volume: item.reps * item.sets
+                        };
+                    }).filter(item => !isNaN(item.volume)); // Filter out invalid rows
+                    
+                    // Sort by date
+                    workoutData.sort((a, b) => a.date - b.date);
+                    
+                    // Show dashboard content
+                    document.getElementById('dashboard-content').style.display = 'block';
+                    
+                    // Initialize dashboard
+                    updateSummaryStats();
+                    populateExerciseSelector();
+                    initializeCharts();
+                    updateDataTable();
+                },
+                error: function(error) {
+                    console.error("Error parsing CSV:", error);
+                    alert("Error parsing CSV file. Please check the file format.");
+                }
+            });
+        });
+        
+        function updateSummaryStats() {
+            const statsContainer = document.getElementById('summary-stats');
+            statsContainer.innerHTML = '';
+            
+            // Calculate stats
+            const totalWorkouts = workoutData.length;
+            const uniqueExercises = [...new Set(workoutData.map(item => item.name))].length;
+            const totalCalories = workoutData.reduce((sum, item) => sum + (item.calories || 0), 0);
+            const totalVolume = workoutData.reduce((sum, item) => sum + item.volume, 0);
+            
+            // Create stat cards
+            const stats = [
+                { value: totalWorkouts, label: 'Total Workouts' },
+                { value: uniqueExercises, label: 'Unique Exercises' },
+                { value: totalCalories, label: 'Total Calories' },
+                { value: totalVolume, label: 'Total Volume' }
+            ];
+            
+            stats.forEach(stat => {
+                const card = document.createElement('div');
+                card.className = 'stat-card';
+                card.innerHTML = `
+                    <div class="stat-value">${stat.value}</div>
+                    <div class="stat-label">${stat.label}</div>
+                `;
+                statsContainer.appendChild(card);
+            });
+        }
+        
+        function populateExerciseSelector() {
+            const selector = document.getElementById('exercise-selector');
+            
+            // Get unique exercises
+            const exercises = [...new Set(workoutData.map(item => item.name))].sort();
+            
+            // Clear existing options except "All Exercises"
+            while (selector.options.length > 1) {
+                selector.remove(1);
+            }
+            
+            // Add exercise options
+            exercises.forEach(exercise => {
+                const option = document.createElement('option');
+                option.value = exercise;
+                option.textContent = exercise;
+                selector.appendChild(option);
+            });
+        }
+        
+        function initializeCharts() {
+            // Destroy existing charts if they exist
+            if (caloriesChart) caloriesChart.destroy();
+            if (volumeChart) volumeChart.destroy();
+            if (exerciseChart) exerciseChart.destroy();
+            
+            // Create charts
+            createCaloriesChart();
+            createVolumeChart();
+            createExerciseChart();
+        }
+        
+        function createCaloriesChart() {
+            const ctx = document.getElementById('caloriesChart').getContext('2d');
+            
+            // Group by date
+            const dateGroups = {};
+            workoutData.forEach(item => {
+                if (!dateGroups[item.dateString]) {
+                    dateGroups[item.dateString] = {
+                        date: item.date,
+                        calories: 0
+                    };
+                }
+                dateGroups[item.dateString].calories += item.calories || 0;
+            });
+            
+            const sortedDates = Object.values(dateGroups).sort((a, b) => a.date - b.date);
+            
+            caloriesChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: sortedDates.map(item => item.dateString),
+                    datasets: [{
+                        label: 'Calories Burned',
+                        data: sortedDates.map(item => item.calories),
+                        borderColor: 'rgba(231, 76, 60, 1)',
+                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.1,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Calories'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function createVolumeChart() {
+            const ctx = document.getElementById('volumeChart').getContext('2d');
+            
+            // Group by date
+            const dateGroups = {};
+            workoutData.forEach(item => {
+                if (!dateGroups[item.dateString]) {
+                    dateGroups[item.dateString] = {
+                        date: item.date,
+                        volume: 0
+                    };
+                }
+                dateGroups[item.dateString].volume += item.volume;
+            });
+            
+            const sortedDates = Object.values(dateGroups).sort((a, b) => a.date - b.date);
+            
+            volumeChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sortedDates.map(item => item.dateString),
+                    datasets: [{
+                        label: 'Total Volume (Reps × Sets)',
+                        data: sortedDates.map(item => item.volume),
+                        backgroundColor: 'rgba(52, 152, 219, 0.7)',
+                        borderColor: 'rgba(52, 152, 219, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Volume'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function createExerciseChart() {
+            const ctx = document.getElementById('exerciseChart').getContext('2d');
+            
+            // Count exercise frequency
+            const exerciseCount = {};
+            workoutData.forEach(item => {
+                exerciseCount[item.name] = (exerciseCount[item.name] || 0) + 1;
+            });
+            
+            // Sort by count
+            const sortedExercises = Object.entries(exerciseCount)
+                .sort((a, b) => b[1] - a[1]);
+            
+            exerciseChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: sortedExercises.map(item => item[0]),
+                    datasets: [{
+                        data: sortedExercises.map(item => item[1]),
+                        backgroundColor: [
+                            'rgba(52, 152, 219, 0.7)',
+                            'rgba(155, 89, 182, 0.7)',
+                            'rgba(26, 188, 156, 0.7)',
+                            'rgba(241, 196, 15, 0.7)',
+                            'rgba(230, 126, 34, 0.7)',
+                            'rgba(231, 76, 60, 0.7)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                        },
+                        title: {
+                            display: true,
+                            text: 'Exercise Frequency'
+                        }
+                    }
+                }
+            });
+        }
+        
+        function updateExerciseCharts() {
+            const selectedExercise = document.getElementById('exercise-selector').value;
+            let filteredData = workoutData;
+            
+            if (selectedExercise) {
+                filteredData = workoutData.filter(item => item.name === selectedExercise);
+            }
+            
+            // Update calories chart
+            updateChartWithFilteredData(caloriesChart, filteredData, 'calories', 'Calories Burned');
+            
+            // Update volume chart
+            updateChartWithFilteredData(volumeChart, filteredData, 'volume', 'Total Volume');
+        }
+        
+        function updateChartWithFilteredData(chart, filteredData, valueKey, label) {
+            // Group by date
+            const dateGroups = {};
+            filteredData.forEach(item => {
+                if (!dateGroups[item.dateString]) {
+                    dateGroups[item.dateString] = {
+                        date: item.date,
+                        value: 0
+                    };
+                }
+                dateGroups[item.dateString].value += item[valueKey] || 0;
+            });
+            
+            const sortedDates = Object.values(dateGroups).sort((a, b) => a.date - b.date);
+            
+            chart.data.labels = sortedDates.map(item => item.dateString);
+            chart.data.datasets[0].data = sortedDates.map(item => item.value);
+            chart.data.datasets[0].label = label;
+            chart.update();
+        }
+        
+        function updateDataTable() {
+            const tableBody = document.querySelector('#workoutTable tbody');
+            tableBody.innerHTML = '';
+            
+            // Add rows (limit to 100 for performance)
+            const rowCount = Math.min(100, workoutData.length);
+            for (let i = 0; i < rowCount; i++) {
+                const item = workoutData[i];
+                const row = document.createElement('tr');
+                
+                row.innerHTML = `
+                    <td>${item.dateString}</td>
+                    <td>${item.name}</td>
+                    <td>${item.reps}</td>
+                    <td>${item.sets}</td>
+                    <td>${item.calories || 0}</td>
+                `;
+                
+                tableBody.appendChild(row);
+            }
+        }
+    </script>
+</body>
+</html>
